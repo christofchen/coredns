@@ -3,7 +3,7 @@ package file
 import (
 	"fmt"
 	"net"
-	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +32,7 @@ type Zone struct {
 	LastReloaded   time.Time
 	reloadMu       sync.RWMutex
 	reloadShutdown chan bool
-	Upstream       upstream.Upstream // Upstream for looking up names during the resolution process
+	Upstream       *upstream.Upstream // Upstream for looking up external names during the resolution process
 }
 
 // Apex contains the apex records of a zone: SOA, NS and their potential signatures.
@@ -48,7 +48,7 @@ func NewZone(name, file string) *Zone {
 	z := &Zone{
 		origin:         dns.Fqdn(name),
 		origLen:        dns.CountLabel(dns.Fqdn(name)),
-		file:           path.Clean(file),
+		file:           filepath.Clean(file),
 		Tree:           &tree.Tree{},
 		Expired:        new(bool),
 		reloadShutdown: make(chan bool),

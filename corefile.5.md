@@ -23,7 +23,7 @@ The optional **SCHEME** defaults to `dns://`, but can also be `tls://` (DNS over
 The optional **PORT** controls on which port the server will bind, this default to 53. If you use
 a port number here, you *can't* override it with `-dns.port` (coredns(1)).
 
-Specifying a **ZONE** *and* **PORT** combination multiple time for *different* servers will lead to
+Specifying a **ZONE** *and* **PORT** combination multiple times for *different* servers will lead to
 an error on startup.
 
 When a query comes in, it is matched again all zones for all servers, the server with the longest
@@ -39,13 +39,32 @@ Comments may be started anywhere on a line.
 Environment variables are supported and either the Unix or Windows form may be used: `{$ENV_VAR_1}`
 or `{%ENV_VAR_2%}`.
 
-You can use the `import` "plugin" to include parts of other files, see <https://coredns.io/explugins/import>.
+You can use the `import` "plugin" to include parts of other files.
 
 If CoreDNS can’t find a Corefile to load it loads the following builtin one:
 
-~~~ Corefile
+~~~ corefile
 . {
     whoami
+}
+~~~
+
+## Import
+
+You can use the `import` "plugin" to include parts of other files, see <https://coredns.io/plugins/import>.
+
+## Snippets
+
+If you want to reuse a snippet you can define one with and then use it with *import*.
+
+~~~ corefile
+(mysnippet) {
+    log
+    whoami
+}
+
+. {
+    import mysnippet
 }
 ~~~
 
@@ -54,7 +73,7 @@ If CoreDNS can’t find a Corefile to load it loads the following builtin one:
 The **ZONE** is root zone `.`, the **PLUGIN** is chaos. The chaos plugin takes an argument:
 `CoreDNS-001`. This text is returned on a CH class query: `dig CH txt version.bind @localhost`.
 
-~~~ Corefile
+~~~ corefile
 . {
    chaos CoreDNS-001
 }
@@ -63,7 +82,7 @@ The **ZONE** is root zone `.`, the **PLUGIN** is chaos. The chaos plugin takes a
 When defining a new zone, you either create a new server, or add it to an existing one. Here we
 define one server that handles two zones; that potentially chain different plugins:
 
-~~~ Corefile
+~~~ corefile
 example.org {
     whoami
 }
@@ -74,7 +93,7 @@ org {
 
 Is identical to:
 
-~~~ Corefile
+~~~ corefile
 example.org org {
     whoami
 }
@@ -82,7 +101,7 @@ example.org org {
 
 Reverse zones can be specified as domain names:
 
-~~~ Corefile
+~~~ corefile
 0.0.10.in-addr.arpa {
     whoami
 }
@@ -90,7 +109,7 @@ Reverse zones can be specified as domain names:
 
 or by just using the CIDR notation:
 
-~~~ Corefile
+~~~ corefile
 10.0.0.0/24 {
     whoami
 }
@@ -98,7 +117,7 @@ or by just using the CIDR notation:
 
 This also works on a non octet boundary:
 
-~~~ Corefile
+~~~ corefile
 10.0.0.0/27 {
     whoami
 }
@@ -115,3 +134,4 @@ Apache License 2.0
 ## See Also
 
 The manual page for CoreDNS: coredns(1) and more documentation on <https://coredns.io>.
+Also see the [*import*](https://coredns.io/plugins/import)'s documentation.

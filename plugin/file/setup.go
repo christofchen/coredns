@@ -2,7 +2,7 @@ package file
 
 import (
 	"os"
-	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/coredns/coredns/core/dnsserver"
@@ -71,8 +71,8 @@ func fileParse(c *caddy.Controller) (Zones, error) {
 			origins = args
 		}
 
-		if !path.IsAbs(fileName) && config.Root != "" {
-			fileName = path.Join(config.Root, fileName)
+		if !filepath.IsAbs(fileName) && config.Root != "" {
+			fileName = filepath.Join(config.Root, fileName)
 		}
 
 		reader, err := os.Open(fileName)
@@ -93,7 +93,7 @@ func fileParse(c *caddy.Controller) (Zones, error) {
 		}
 
 		reload := 1 * time.Minute
-		upstr := upstream.Upstream{}
+		upstr := upstream.New()
 		t := []string{}
 		var e error
 
@@ -112,15 +112,9 @@ func fileParse(c *caddy.Controller) (Zones, error) {
 				}
 				reload = d
 
-			case "no_reload":
-				reload = 0
-
 			case "upstream":
-				args := c.RemainingArgs()
-				upstr, err = upstream.New(args)
-				if err != nil {
-					return Zones{}, err
-				}
+				// ignore args, will be error later.
+				c.RemainingArgs() // clear buffer
 
 			default:
 				return Zones{}, c.Errf("unknown property '%s'", c.Val())

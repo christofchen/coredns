@@ -88,6 +88,34 @@ var cacheTestCases = []cacheTestCase{
 		shouldCache: true,
 	},
 	{
+		RecursionAvailable: true, Authoritative: false,
+		Case: test.Case{
+			Rcode: dns.RcodeServerFailure,
+			Qname: "example.org.", Qtype: dns.TypeA,
+			Ns: []dns.RR{},
+		},
+		in: test.Case{
+			Rcode: dns.RcodeServerFailure,
+			Qname: "example.org.", Qtype: dns.TypeA,
+			Ns: []dns.RR{},
+		},
+		shouldCache: true,
+	},
+	{
+		RecursionAvailable: true, Authoritative: false,
+		Case: test.Case{
+			Rcode: dns.RcodeNotImplemented,
+			Qname: "example.org.", Qtype: dns.TypeA,
+			Ns: []dns.RR{},
+		},
+		in: test.Case{
+			Rcode: dns.RcodeNotImplemented,
+			Qname: "example.org.", Qtype: dns.TypeA,
+			Ns: []dns.RR{},
+		},
+		shouldCache: true,
+	},
+	{
 		RecursionAvailable: true, Authoritative: true,
 		Case: test.Case{
 			Qname: "miek.nl.", Qtype: dns.TypeMX,
@@ -167,7 +195,7 @@ func TestCache(t *testing.T) {
 		state := request.Request{W: nil, Req: m}
 
 		mt, _ := response.Typify(m, utc)
-		valid, k := key(m, mt, state.Do())
+		valid, k := key(state.Name(), m, mt, state.Do())
 
 		if valid {
 			crr.set(m, k, mt, c.pttl)
@@ -184,20 +212,19 @@ func TestCache(t *testing.T) {
 		if ok {
 			resp := i.toMsg(m, time.Now().UTC())
 
-			if !test.Header(t, tc.Case, resp) {
-				t.Logf("%v\n", resp)
+			if err := test.Header(tc.Case, resp); err != nil {
+				t.Error(err)
 				continue
 			}
 
-			if !test.Section(t, tc.Case, test.Answer, resp.Answer) {
-				t.Logf("%v\n", resp)
+			if err := test.Section(tc.Case, test.Answer, resp.Answer); err != nil {
+				t.Error(err)
 			}
-			if !test.Section(t, tc.Case, test.Ns, resp.Ns) {
-				t.Logf("%v\n", resp)
-
+			if err := test.Section(tc.Case, test.Ns, resp.Ns); err != nil {
+				t.Error(err)
 			}
-			if !test.Section(t, tc.Case, test.Extra, resp.Extra) {
-				t.Logf("%v\n", resp)
+			if err := test.Section(tc.Case, test.Extra, resp.Extra); err != nil {
+				t.Error(err)
 			}
 		}
 	}
@@ -241,8 +268,7 @@ func BenchmarkCacheResponse(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		req := reqs[j]
 		c.ServeDNS(ctx, &test.ResponseWriter{}, req)
-		j++
-		j = j % 5
+		j = (j + 1) % 5
 	}
 }
 

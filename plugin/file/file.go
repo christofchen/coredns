@@ -31,7 +31,7 @@ type (
 
 // ServeDNS implements the plugin.Handle interface.
 func (f File) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	state := request.Request{W: w, Req: r, Context: ctx}
+	state := request.Request{W: w, Req: r}
 
 	qname := state.Name()
 	// TODO(miek): match the qname better in the map
@@ -50,8 +50,7 @@ func (f File) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (i
 		if z.isNotify(state) {
 			m := new(dns.Msg)
 			m.SetReply(r)
-			m.Authoritative, m.RecursionAvailable = true, true
-			state.SizeAndDo(m)
+			m.Authoritative = true
 			w.WriteMsg(m)
 
 			log.Infof("Notify from %s for %s: checking transfer", state.IP(), zone)
@@ -80,11 +79,11 @@ func (f File) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (i
 		return xfr.ServeDNS(ctx, w, r)
 	}
 
-	answer, ns, extra, result := z.Lookup(state, qname)
+	answer, ns, extra, result := z.Lookup(ctx, state, qname)
 
 	m := new(dns.Msg)
 	m.SetReply(r)
-	m.Authoritative, m.RecursionAvailable = true, true
+	m.Authoritative = true
 	m.Answer, m.Ns, m.Extra = answer, ns, extra
 
 	switch result {
@@ -120,16 +119,18 @@ func (s *serialErr) Error() string {
 // If serial >= 0 it will reload the zone, if the SOA hasn't changed
 // it returns an error indicating nothing was read.
 func Parse(f io.Reader, origin, fileName string, serial int64) (*Zone, error) {
-	tokens := dns.ParseZone(f, dns.Fqdn(origin), fileName)
+
+	zp := dns.NewZoneParser(f, dns.Fqdn(origin), fileName)
+	zp.SetIncludeAllowed(true)
 	z := NewZone(origin, fileName)
 	seenSOA := false
-	for x := range tokens {
-		if x.Error != nil {
-			return nil, x.Error
+	for rr, ok := zp.Next(); ok; rr, ok = zp.Next() {
+		if err := zp.Err(); err != nil {
+			return nil, err
 		}
 
 		if !seenSOA && serial >= 0 {
-			if s, ok := x.RR.(*dns.SOA); ok {
+			if s, ok := rr.(*dns.SOA); ok {
 				if s.Serial == uint32(serial) { // same serial
 					return nil, &serialErr{err: "no change in SOA serial", origin: origin, zone: fileName, serial: serial}
 				}
@@ -137,7 +138,7 @@ func Parse(f io.Reader, origin, fileName string, serial int64) (*Zone, error) {
 			}
 		}
 
-		if err := z.Insert(x.RR); err != nil {
+		if err := z.Insert(rr); err != nil {
 			return nil, err
 		}
 	}

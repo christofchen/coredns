@@ -12,11 +12,14 @@ import (
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/debug"
+	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
 	ot "github.com/opentracing/opentracing-go"
 )
+
+var log = clog.NewWithPlugin("forward")
 
 // Forward represents a plugin instance that can proxy requests to another (DNS) server. It has a list
 // of proxies each representing one upstream proxy.
@@ -71,7 +74,7 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 	i := 0
 	list := f.List()
 	deadline := time.Now().Add(defaultTimeout)
-
+	start := time.Now()
 	for time.Now().Before(deadline) {
 		if i >= len(list) {
 			// reached the end of list, reset to begin
@@ -113,7 +116,7 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 				continue
 			}
 			// Retry with TCP if truncated and prefer_udp configured.
-			if err == dns.ErrTruncated && !opts.forceTCP && f.opts.preferUDP {
+			if ret != nil && ret.Truncated && !opts.forceTCP && f.opts.preferUDP {
 				opts.forceTCP = true
 				continue
 			}
@@ -123,8 +126,8 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		if child != nil {
 			child.Finish()
 		}
+		taperr := toDnstap(ctx, proxy.addr, f, state, ret, start)
 
-		ret, err = truncated(state, ret, err)
 		upstreamErr = err
 
 		if err != nil {
@@ -141,15 +144,16 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 
 		// Check if the reply is correct; if not return FormErr.
 		if !state.Match(ret) {
-			debug.Hexdumpf(ret, "Wrong reply for id: %d, %s/%d", state.QName(), state.QType())
+			debug.Hexdumpf(ret, "Wrong reply for id: %d, %s %d", ret.Id, state.QName(), state.QType())
 
-			formerr := state.ErrorMessage(dns.RcodeFormatError)
+			formerr := new(dns.Msg)
+			formerr.SetRcode(state.Req, dns.RcodeFormatError)
 			w.WriteMsg(formerr)
-			return 0, nil
+			return 0, taperr
 		}
 
 		w.WriteMsg(ret)
-		return 0, nil
+		return 0, taperr
 	}
 
 	if upstreamErr != nil {
